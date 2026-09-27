@@ -243,6 +243,177 @@ Method registration is required for a Ractor-shareable callback collection.
 Block callbacks retain mutable lexical context and are therefore rejected.
 Callback exceptions propagate to the caller.
 
+## Examples
+
+### Parallel job workers, one Ractor each
+
+Every worker receives the same shareable Sentinel specification and builds
+its own pool. Nothing but the specification and plain data crosses the
+Ractor boundary.
+
+```ruby
+SENTINEL = SolidRedis.sentinel(
+  name: "mymaster",
+  sentinels: ["redis://sentinel-1:26379", "redis://sentinel-2:26379"],
+  password: ENV.fetch("REDIS_PASSWORD"),
+  timeout: 1.0
+)
+
+workers = 4.times.map do |index|
+  Ractor.new(SENTINEL, index) do |sentinel, worker_id|
+    pool = sentinel.new_pool(size: 2)
+    processed = 0
+
+    while (job = pool.call("RPOP", "jobs"))
+      pool.call("HINCRBY", "stats", "worker:#{worker_id}", 1)
+      processed += 1
+    end
+
+    processed
+  ensure
+    pool&.close
+  end
+end
+
+workers.sum(&:value) # total processed jobs (use &:take on Ruby 3.x)
+```
+
+### Threads sharing a pool inside one Ractor
+
+Threads within a Ractor may share a pool. On CRuby < 4.0 keep all threads in
+a single Ractor (see the limitation below).
+
+```ruby
+pool = SolidRedis.config(url: "redis://localhost:6379").new_pool(size: 8)
+
+threads = 20.times.map do |i|
+  Thread.new { pool.call("SET", "key:#{i}", i) }
+end
+threads.each(&:join)
+
+pool.call("DBSIZE") # => 20
+pool.close
+```
+
+### Pipelines and error handling
+
+`call` raises `SolidRedis::CommandError` on a Redis error reply. A pipeline
+sends all commands in one round trip, reads every reply, and then raises the
+first `CommandError` if any; the whole pipeline succeeds or raises.
+
+```ruby
+client = SolidRedis.config(url: "redis://localhost:6379").new_client
+
+begin
+  client.call("INCR", "not-a-number")
+rescue SolidRedis::CommandError => error
+  error.message # => "ERR value is not an integer or out of range"
+end
+
+client.pipelined do |pipeline|
+  pipeline.call("SET", "counter", 1)
+  pipeline.call("INCR", "counter")
+  pipeline.call("GET", "counter")
+end
+# => ["OK", 2, "2"]
+
+begin
+  client.pipelined do |pipeline|
+    pipeline.call("SET", "counter", "abc")
+    pipeline.call("INCR", "counter") # fails; the SET was still applied
+  end
+rescue SolidRedis::CommandError => error
+  error.message # => "ERR value is not an integer or out of range"
+end
+```
+
+### Building commands dynamically
+
+`call_v` accepts an array, which is convenient for variadic commands.
+
+```ruby
+fields = { "name" => "Ada", "language" => "Ruby" }
+client.call_v(["HSET", "user:1", *fields.flatten])
+client.call("HGETALL", "user:1")
+# => { "name" => "Ada", "language" => "Ruby" } with RESP3
+# => ["name", "Ada", "language", "Ruby"]     with RESP2
+```
+
+### Reading from replicas
+
+Use `role: :replica` for read-only traffic and keep a separate `:master`
+specification for writes. Both are shareable and resolve independently.
+
+```ruby
+WRITER = SolidRedis.sentinel(name: "mymaster", sentinels: SENTINELS, role: :master)
+READER = SolidRedis.sentinel(name: "mymaster", sentinels: SENTINELS, role: :replica)
+
+Ractor.new(WRITER, READER) do |writer, reader|
+  writer.new_client.call("SET", "greeting", "hello")
+  reader.new_client.call("GET", "greeting") # after replication
+end
+```
+
+### Observing failover
+
+After a connection error the Ractor's cached target is dropped and the next
+attempt asks Sentinel again. Register a callback to trace it.
+
+```ruby
+module FailoverLog
+  def self.connection_error(type, message) = warn("[redis] #{type}: #{message}")
+  def self.resolved(name, url)             = warn("[redis] #{name} -> #{url}")
+end
+
+callbacks = CallbackCollection.new do |collection|
+  collection.register(:connection_error, FailoverLog)
+  collection.register(:resolved, FailoverLog)
+end
+
+sentinel = SolidRedis.sentinel(
+  name: "mymaster",
+  sentinels: SENTINELS,
+  reconnect_attempts: 2,
+  callbacks: callbacks
+)
+
+client = sentinel.new_client
+client.call("PING")            # [redis] mymaster -> redis://10.0.0.15:6379
+# ... master goes down, Sentinel promotes a replica ...
+client.call("PING")            # [redis] ConnectionError: Connection reset by peer
+                               # [redis] mymaster -> redis://10.0.0.16:6379
+```
+
+### Strict at-most-once delivery
+
+Retries after a connection error may replay a command. Disable them for
+non-idempotent operations and handle the error yourself.
+
+```ruby
+config = SolidRedis.config(url: "redis://localhost:6379", reconnect_attempts: 0)
+client = config.new_client
+
+begin
+  client.call("LPUSH", "payments", payment_id)
+rescue SolidRedis::ConnectionError
+  # Nothing was retried; decide whether to re-enqueue.
+end
+```
+
+### Unix socket and TLS
+
+```ruby
+SolidRedis.config(url: "unix:///var/run/redis/redis.sock", db: 2)
+
+SolidRedis.config(
+  url: "rediss://redis.example:6380",
+  ssl_params: {
+    verify_mode: OpenSSL::SSL::VERIFY_PEER,
+    ca_file: "/etc/ssl/certs/redis-ca.pem"
+  }
+)
+```
+
 ## Semantics and current scope
 
 - Clients, pools, sockets, mutexes, and Sentinel runtime state are never
