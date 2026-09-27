@@ -589,6 +589,22 @@ bundle exec rake
 The default task runs the Minitest suite and builds the gem in `pkg/`.
 CI runs the suite on Ruby 3.1 through 4.0.
 
+The suite needs no running Redis: it uses an in-process fake server
+(`test/support/fake_redis_server.rb`) that speaks RESP2/RESP3, Sentinel,
+Pub/Sub and a three-node Cluster topology. To try a specific Ruby version:
+
+```sh
+RBENV_VERSION=4.0.1 rbenv exec bundle exec rake test
+```
+
+To exercise the client against a real server, start `redis-server` and run
+snippets from the examples above with `bundle exec ruby -Ilib`. A local
+cluster for manual checks can be created with three
+`redis-server --port 700X --cluster-enabled yes` processes followed by
+`redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 --cluster-yes`.
+
+The changelog lives in `CHANGELOG.md`; add an entry for every release.
+
 ## Publishing
 
 Releases use RubyGems Trusted Publishing. Configure a pending trusted

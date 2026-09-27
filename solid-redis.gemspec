@@ -13,12 +13,13 @@ Gem::Specification.new do |spec|
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1"
 
-  spec.files = Dir["lib/**/*.rb", "README.md", "LICENSE.txt"]
+  spec.files = Dir["lib/**/*.rb", "README.md", "CHANGELOG.md", "LICENSE.txt"]
   spec.require_paths = ["lib"]
 
   spec.metadata["rubygems_mfa_required"] = "true"
   spec.metadata["documentation_uri"] = "https://www.rubydoc.info/gems/solid-redis/#{spec.version}"
   spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
 
   spec.add_dependency "base-service", "~> 0.1"
   spec.add_dependency "callback-collection", "~> 0.2"

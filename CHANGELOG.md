@@ -1,0 +1,82 @@
+# Changelog
+
+All notable changes to this project are documented in this file. The format
+follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
+project adheres to [Semantic Versioning](https://semver.org/).
+
+## [1.0.2] - 2026-09-27
+
+### Added
+
+- `CHANGELOG.md` and `changelog_uri` gem metadata.
+
+### Changed
+
+- README: describe the test suite's fake server and how to check against a
+  real Redis or local cluster.
+
+## [1.0.1] - 2026-09-27
+
+### Changed
+
+- README: document the Cluster architecture (`ClusterConfig`/`ClusterState`).
+
+## [1.0.0] - 2026-09-27
+
+### Added
+
+- `Client#blocking_call(timeout, *command)` and `#blocking_call_v` for BLPOP,
+  BRPOP, BZPOPMIN, XREAD BLOCK and similar commands. The read timeout is
+  extended by `timeout`; `nil`/`0` waits forever. Blocking commands are never
+  retried. Also available on `Pool`.
+- Pub/Sub: `Config#new_subscription` and `SentinelConfig#new_subscription`
+  return a `SolidRedis::Subscription` bound to a dedicated connection, with
+  `subscribe`/`psubscribe`/`ssubscribe`, `next_message(timeout:)`,
+  `each_message`, `ping`, and automatic resubscription after reconnect.
+- Redis Cluster: `SolidRedis.cluster(nodes:, max_redirections:, **options)`
+  builds a shareable `ClusterConfig`. Each Ractor keeps its own `ClusterState`
+  (slot table and per-node clients). `ClusterClient` handles `MOVED`, `ASK`,
+  `TRYAGAIN` and `CLUSTERDOWN`, extracts routing keys (hash tags, EVAL/FCALL,
+  XREAD STREAMS, ZUNION-style commands) and runs pipelines grouped per node
+  while preserving reply order.
+- `RESP::Reader#with_timeout` and `#wait_readable`.
+
+## [0.2.1] - 2026-09-27
+
+### Changed
+
+- README: refresh the downloads badge.
+
+## [0.2.0] - 2026-09-27
+
+### Added
+
+- `Client#pipelined(exception: false)` returns `CommandError` instances in
+  place instead of raising the first one.
+
+## [0.1.1] - 2026-09-27
+
+### Added
+
+- README usage examples.
+
+### Changed
+
+- Require Ruby >= 3.1; CI runs Ruby 3.1 through 4.0.
+
+## [0.1.0] - 2026-09-27
+
+### Added
+
+- Initial release: immutable, Ractor-shareable `Config` and `SentinelConfig`
+  with per-Ractor `SentinelState`, `Client` (RESP2/RESP3, TCP, Unix socket,
+  TLS, reconnection), `Pool` owned by a single Ractor, pipelines, and
+  lifecycle callbacks via `callback-collection`.
+
+[1.0.2]: https://github.com/nicolasva/solid-redis/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/nicolasva/solid-redis/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/nicolasva/solid-redis/compare/v0.2.1...v1.0.0
+[0.2.1]: https://github.com/nicolasva/solid-redis/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/nicolasva/solid-redis/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/nicolasva/solid-redis/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/nicolasva/solid-redis/releases/tag/v0.1.0
