@@ -26,6 +26,20 @@ class ConfigTest < Minitest::Test
     refute_includes config.inspect, "s@cret"
   end
 
+  def test_explicit_database_overrides_url_database
+    assert_equal 5, SolidRedis.config(url: "redis://example.com", db: 5).db
+    assert_equal 5, SolidRedis.config(url: "redis://example.com/4", db: 5).db
+    assert_equal 5, SolidRedis.config(url: "redis://example.com?db=4", db: 5).db
+    assert_equal 5, SolidRedis.config(url: "unix:///var/run/redis.sock", db: 5).db
+  end
+
+  def test_url_database_is_used_when_database_is_not_explicit
+    assert_equal 0, SolidRedis.config(url: "redis://example.com").db
+    assert_equal 4, SolidRedis.config(url: "redis://example.com/4").db
+    assert_equal 4, SolidRedis.config(url: "redis://example.com?db=4").db
+    assert_equal 4, SolidRedis.config(url: "unix:///var/run/redis.sock?db=4").db
+  end
+
   def test_rejects_non_shareable_configuration
     error = assert_raises(ArgumentError) do
       SolidRedis.config(ssl_params: { callback: proc {} })

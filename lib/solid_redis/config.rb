@@ -6,6 +6,7 @@ module SolidRedis
   class Config
     DEFAULT_TIMEOUT = 1.0
     DEFAULT_PORT = 6379
+    UNSPECIFIED = Object.new.freeze
 
     attr_reader :host, :port, :path, :username, :password, :db,
       :connect_timeout, :read_timeout, :write_timeout, :reconnect_attempts,
@@ -18,7 +19,7 @@ module SolidRedis
       path: nil,
       username: nil,
       password: nil,
-      db: 0,
+      db: UNSPECIFIED,
       timeout: DEFAULT_TIMEOUT,
       connect_timeout: timeout,
       read_timeout: timeout,
@@ -35,9 +36,10 @@ module SolidRedis
         path = values[:path]
         username ||= values[:username]
         password ||= values[:password]
-        db = values[:db] unless values[:db].nil?
+        db = values[:db] if db.equal?(UNSPECIFIED) && !values[:db].nil?
         ssl ||= values[:ssl]
       end
+      db = 0 if db.equal?(UNSPECIFIED)
 
       @host = String(host).dup.freeze unless path
       @port = Integer(port) unless path
@@ -140,10 +142,10 @@ module SolidRedis
     end
 
     def query_db(uri)
-      return 0 unless uri.query
+      return unless uri.query
 
       value = URI.decode_www_form(uri.query).to_h["db"]
-      value ? Integer(value) : 0
+      Integer(value) if value
     end
 
     def decoded(value)

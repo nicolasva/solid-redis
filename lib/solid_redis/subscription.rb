@@ -75,6 +75,9 @@ module SolidRedis
         return unless @reader.wait_readable(timeout)
 
         return decode(@reader.read)
+      rescue ProtocolError => error
+        handle_error(error)
+        raise
       rescue ConnectionError, IO::WaitReadable, IO::WaitWritable, SystemCallError => error
         handle_error(error)
         raise error if attempts >= config.reconnect_attempts
@@ -123,6 +126,9 @@ module SolidRedis
       loop do
         ensure_connected
         return write(RESP.encode(yield))
+      rescue ProtocolError => error
+        handle_error(error)
+        raise
       rescue ConnectionError, IO::WaitReadable, IO::WaitWritable, SystemCallError => error
         handle_error(error)
         raise error if attempts >= config.reconnect_attempts

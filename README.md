@@ -272,9 +272,9 @@ client.call("GET", "user:1")
 client.call("MGET", "{user:1}.name", "{user:1}.email") # same slot via hash tag
 
 client.pipelined do |pipeline|
-  pipeline.call("GET", "a")   # commands are grouped per node,
-  pipeline.call("GET", "b")   # sent in parallel pipelines,
-  pipeline.call("PING")       # and results come back in order
+  pipeline.call("GET", "a")   # commands are grouped into one pipeline
+  pipeline.call("GET", "b")   # per node, and results come back
+  pipeline.call("PING")       # in their original order
 end
 
 pool = CLUSTER.new_pool(size: 5) # a pool of cluster clients
@@ -307,6 +307,10 @@ Direct Redis options:
 | `reconnect_attempts` | `1` | Retries after a connection error |
 | `ssl` | `false` | Enable TLS |
 | `ssl_params` | | Immutable `OpenSSL::SSL::SSLContext` attributes |
+
+An explicit `db:` option takes precedence over a database selected by the URL
+path or `?db=` query parameter. When neither specifies a database, it defaults
+to `0`.
 
 Sentinel additionally requires `name` and `sentinels`, and accepts `role`,
 `sentinel_username`, `sentinel_password`, `sentinel_ssl`, and

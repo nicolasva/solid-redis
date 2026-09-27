@@ -128,6 +128,8 @@ class FakeRedisServer
       "*#{value.length}\r\n#{value.map { |element| encode(element) }.join}"
     when Hash
       encode(value.to_a.flatten)
+    when Raw
+      value.value
     when NilClass
       "$-1\r\n"
     else
@@ -137,4 +139,5 @@ class FakeRedisServer
 
   Simple = Struct.new(:value)
   Error = Struct.new(:value)
+  Raw = Struct.new(:value)
 end

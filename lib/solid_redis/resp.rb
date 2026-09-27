@@ -72,7 +72,7 @@ module SolidRedis
         when "~", ">" then read_collection(exception)
         when "=" then read_verbatim
         when "!" then error_response(read_sized_string, exception)
-        when "|" then read_map(exception) && read(exception: exception)
+        when "|" then read_attribute(exception)
         else raise ProtocolError, "Unknown RESP type byte: #{type.inspect}"
         end
       rescue EOFError
@@ -94,18 +94,46 @@ module SolidRedis
         length = Integer(read_line)
         return if length == -1
 
-        Array.new(length) { read(exception: exception) }
+        finish_collection(Array.new(length) { read(exception: false) }, exception)
       end
 
       def read_collection(exception)
         length = Integer(read_line)
-        Array.new(length) { read(exception: exception) }
+        finish_collection(Array.new(length) { read(exception: false) }, exception)
       end
 
       def read_map(exception)
         length = Integer(read_line)
-        {}.tap do |map|
-          length.times { map[read(exception: exception)] = read(exception: exception) }
+        map = {}.tap do |result|
+          length.times { result[read(exception: false)] = read(exception: false) }
+        end
+        finish_collection(map, exception)
+      end
+
+      def read_attribute(exception)
+        attributes = read_map(false)
+        value = read(exception: false)
+        raise_nested_error(attributes) if exception
+        raise_nested_error(value) if exception
+        value
+      end
+
+      def finish_collection(value, exception)
+        raise_nested_error(value) if exception
+        value
+      end
+
+      def raise_nested_error(value)
+        case value
+        when CommandError
+          raise value
+        when Array
+          value.each { |element| raise_nested_error(element) }
+        when Hash
+          value.each do |key, element|
+            raise_nested_error(key)
+            raise_nested_error(element)
+          end
         end
       end
 
@@ -140,9 +168,12 @@ module SolidRedis
       end
 
       def fill_buffer
+        wait_for = :readable
         loop do
           if @io.respond_to?(:to_io)
-            unless IO.select([@io], nil, nil, @read_timeout)
+            readers = wait_for == :readable ? [@io] : nil
+            writers = wait_for == :writable ? [@io] : nil
+            unless IO.select(readers, writers, nil, @read_timeout)
               raise TimeoutError, "Redis read timed out after #{@read_timeout}s"
             end
 
@@ -151,7 +182,10 @@ module SolidRedis
             chunk = @io.read(16_384)
           end
 
-          next if chunk == :wait_readable
+          if chunk == :wait_readable || chunk == :wait_writable
+            wait_for = chunk == :wait_readable ? :readable : :writable
+            next
+          end
           raise EOFError if chunk.nil?
 
           @buffer << chunk

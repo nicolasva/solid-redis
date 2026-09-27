@@ -8,7 +8,7 @@ module SolidRedis
       KEYLESS = Ractor.make_shareable(
         %w[
           ACL ASKING AUTH BGREWRITEAOF BGSAVE CLIENT CLUSTER COMMAND CONFIG DBSIZE DEBUG DISCARD ECHO EXEC
-          FAILOVER FLUSHALL FLUSHDB FUNCTION HELLO INFO LASTSAVE LATENCY LOLWUT MEMORY MODULE MONITOR MULTI PING
+          FAILOVER FLUSHALL FLUSHDB FUNCTION HELLO INFO LASTSAVE LATENCY LOLWUT MODULE MONITOR MULTI PING
           PSUBSCRIBE PUBLISH PUBSUB PUNSUBSCRIBE QUIT RANDOMKEY READONLY READWRITE REPLICAOF RESET ROLE SAVE
           SCAN SCRIPT SELECT SHUTDOWN SLAVEOF SLOWLOG SUBSCRIBE SWAPDB SYNC TIME UNSUBSCRIBE UNWATCH WAIT
         ].to_h { |name| [name, true] },
@@ -42,6 +42,7 @@ module SolidRedis
         end
 
         case name
+        when "MEMORY" then command[1].to_s.casecmp?("USAGE") ? command[2] : nil
         when "XGROUP", "XINFO", "OBJECT" then command[2]
         when "MIGRATE" then command[3].to_s.empty? ? nil : command[3]
         else command[1]

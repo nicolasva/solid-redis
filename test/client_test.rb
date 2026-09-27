@@ -9,6 +9,8 @@ class ClientTest < Minitest::Test
       case command.first
       when "PING" then FakeRedisServer::Simple.new("PONG")
       when "ECHO" then command[1]
+      when "NESTED_ERROR" then ["before", FakeRedisServer::Error.new("ERR nested"), "after"]
+      when "MALFORMED" then FakeRedisServer::Raw.new("?broken\r\n")
       else FakeRedisServer::Error.new("ERR unsupported")
       end
     end
@@ -73,6 +75,30 @@ class ClientTest < Minitest::Test
     assert_instance_of SolidRedis::CommandError, results[1]
     assert_equal "ERR unsupported", results[1].message
     assert_equal "after", results[2]
+  ensure
+    client&.close
+  end
+
+  def test_nested_error_does_not_desynchronize_the_connection
+    client = SolidRedis.config(port: @server.port).new_client
+
+    error = assert_raises(SolidRedis::CommandError) { client.call("NESTED_ERROR") }
+
+    assert_equal "ERR nested", error.message
+    assert_equal "PONG", client.call("PING")
+    assert_equal 1, @server.connection_count
+  ensure
+    client&.close
+  end
+
+  def test_protocol_error_closes_without_replaying_the_command
+    client = SolidRedis.config(port: @server.port, reconnect_attempts: 2).new_client
+
+    assert_raises(SolidRedis::ProtocolError) { client.call("MALFORMED") }
+
+    assert_equal 1, @server.commands.count { |command| command.first == "MALFORMED" }
+    assert_equal "PONG", client.call("PING")
+    assert_equal 2, @server.connection_count
   ensure
     client&.close
   end

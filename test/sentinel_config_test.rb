@@ -79,6 +79,28 @@ class SentinelConfigTest < Minitest::Test
     replica&.stop
   end
 
+  def test_role_mismatch_invalidates_resolution_and_retries_with_new_master
+    replica = FakeRedisServer.new do |command|
+      case command.first
+      when "ROLE"
+        @target_mutex.synchronize { @target_port = @master.port }
+        ["slave"]
+      else
+        FakeRedisServer::Error.new("ERR unsupported")
+      end
+    end
+    @target_mutex.synchronize { @target_port = replica.port }
+    @config.reset
+    client = @config.new_client
+
+    assert_equal "PONG", client.call("PING")
+    assert_equal @master.port, @config.port
+    assert_equal 2, resolution_count
+  ensure
+    client&.close
+    replica&.stop
+  end
+
   private
 
   def redis_server(role)

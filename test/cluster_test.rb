@@ -9,6 +9,7 @@ class ClusterTest < Minitest::Test
   def setup
     @store = {}
     @table = Mutex.new
+    @scripted_replies = {}
     @nodes = 3.times.map { |index| fake_node(index) }
     @owner = Array.new(SolidRedis::Cluster::KeySlot::SLOTS) { |slot| [slot * 3 / SolidRedis::Cluster::KeySlot::SLOTS, 2].min }
     @ranges = @owner.each_index.chunk_while { |a, b| @owner[a] == @owner[b] }.map { |slots| [slots.first, slots.last, @owner[slots.first]] }
@@ -92,6 +93,43 @@ class ClusterTest < Minitest::Test
     client&.close
   end
 
+  def test_pipeline_retries_transient_cluster_errors
+    client = @config.new_client
+    client.call("SET", "foo", "1")
+    owner = @owner[SolidRedis::Cluster::KeySlot.for("foo")]
+
+    %w[TRYAGAIN CLUSTERDOWN].each do |kind|
+      @table.synchronize do
+        @scripted_replies[[owner, "GET", "foo"]] = [FakeRedisServer::Error.new("#{kind} temporary")]
+      end
+
+      assert_equal ["1"], client.pipelined { |pipeline| pipeline.call("GET", "foo") }
+    end
+  ensure
+    client&.close
+  end
+
+  def test_tryagain_after_ask_does_not_send_asking_to_refreshed_owner
+    client = @config.new_client
+    client.call("SET", "foo", "1")
+    slot = SolidRedis::Cluster::KeySlot.for("foo")
+    owner = @owner[slot]
+    target = (owner + 1) % 3
+
+    @table.synchronize do
+      @scripted_replies[[owner, "GET", "foo"]] = [
+        FakeRedisServer::Error.new("ASK #{slot} 127.0.0.1:#{@nodes[target].port}"),
+      ]
+      @scripted_replies[[target, "GET", "foo"]] = [FakeRedisServer::Error.new("TRYAGAIN temporary")]
+    end
+
+    assert_equal "1", client.call("GET", "foo")
+    assert_equal 1, @nodes[target].commands.count { |command| command == ["ASKING"] }
+    assert_equal 0, @nodes[owner].commands.count { |command| command == ["ASKING"] }
+  ensure
+    client&.close
+  end
+
   def test_keyless_commands_and_command_errors
     client = @config.new_client
 
@@ -131,6 +169,9 @@ class ClusterTest < Minitest::Test
   def fake_node(index)
     FakeRedisServer.new do |command|
       name, key = command
+      scripted = @table.synchronize { @scripted_replies[[index, *command]]&.shift }
+      next scripted if scripted
+
       case name
       when "CLUSTER" then slots_reply
       when "PING" then FakeRedisServer::Simple.new("PONG")

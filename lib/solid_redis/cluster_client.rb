@@ -7,6 +7,7 @@ module SolidRedis
   class ClusterClient
     REDIRECTION = /\A(MOVED|ASK) (\d+) (\S+):(\d+)\z/
     RETRY_DELAY = 0.05
+    TRANSIENT_ERRORS = %w[TRYAGAIN CLUSTERDOWN].freeze
 
     attr_reader :config
 
@@ -49,7 +50,8 @@ module SolidRedis
       end
 
       results.each_with_index do |result, index|
-        next unless result.is_a?(CommandError) && result.message.match?(REDIRECTION)
+        next unless result.is_a?(CommandError)
+        next unless result.message.match?(REDIRECTION) || transient_error?(result)
 
         results[index] = begin
           call_v(commands[index])
@@ -107,6 +109,7 @@ module SolidRedis
           redirections += 1
           raise FailoverError, "Cluster unavailable: #{error.message}" if redirections > config.max_redirections
 
+          asking = false
           sleep RETRY_DELAY
           config.state.refresh
           node = node_for(command)
@@ -127,6 +130,10 @@ module SolidRedis
     def node_for(command)
       key = Cluster::CommandKey.for(command)
       key ? config.state.node_for_slot(Cluster::KeySlot.for(key)) : config.state.any_node
+    end
+
+    def transient_error?(error)
+      error.message.start_with?(*TRANSIENT_ERRORS)
     end
 
     def client_for(node)

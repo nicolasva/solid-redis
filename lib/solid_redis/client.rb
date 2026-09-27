@@ -44,10 +44,8 @@ module SolidRedis
       begin
         write(RESP.encode(command))
         @reader.with_timeout(read_timeout) { @reader.read }
-      rescue ConnectionError, IO::WaitReadable, IO::WaitWritable, SystemCallError => error
-        close
-        config.reset if config.sentinel?
-        config.notify(:connection_error, error.class.name, error.message)
+      rescue ProtocolError, ConnectionError, IO::WaitReadable, IO::WaitWritable, SystemCallError => error
+        handle_connection_failure(error)
         raise error if error.is_a?(Error)
 
         raise ConnectionError, error.message, cause: error
@@ -96,10 +94,11 @@ module SolidRedis
       begin
         connect unless connected?
         yield
+      rescue ProtocolError => error
+        handle_connection_failure(error)
+        raise
       rescue ConnectionError, IO::WaitReadable, IO::WaitWritable, SystemCallError => error
-        close
-        config.reset if config.sentinel?
-        config.notify(:connection_error, error.class.name, error.message)
+        handle_connection_failure(error)
         if attempts < config.reconnect_attempts
           attempts += 1
           retry
@@ -108,6 +107,12 @@ module SolidRedis
 
         raise ConnectionError, error.message, cause: error
       end
+    end
+
+    def handle_connection_failure(error)
+      close
+      config.reset if config.sentinel?
+      config.notify(:connection_error, error.class.name, error.message)
     end
 
     def connect
