@@ -7,8 +7,8 @@ Gem::Specification.new do |spec|
   spec.version = SolidRedis::VERSION
   spec.authors = ["Nicolas Vandenbogaerde"]
 
-  spec.summary = "A Ractor-aware Redis client with Sentinel support"
-  spec.description = "Use immutable Redis configuration with isolated Sentinel state, pools, and sockets per Ractor."
+  spec.summary = "A Ractor-aware Redis client with Sentinel, Cluster, Pub/Sub and blocking command support"
+  spec.description = "Immutable, shareable Redis, Sentinel and Cluster configuration with isolated runtime state, pools, and sockets per Ractor. Supports pipelines, blocking commands, and Pub/Sub."
   spec.homepage = "https://github.com/nicolasva/solid-redis"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1"

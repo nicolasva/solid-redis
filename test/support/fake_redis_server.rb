@@ -11,6 +11,7 @@ class FakeRedisServer
     @port = @server.local_address.ip_port
     @commands = []
     @clients = []
+    @subscriptions = {}
     @mutex = Mutex.new
     @running = true
     @accept_thread = Thread.new { accept_connections }
@@ -22,6 +23,27 @@ class FakeRedisServer
 
   def connection_count
     @mutex.synchronize { @clients.length }
+  end
+
+  # Pushes a Pub/Sub message to every socket subscribed to +channel+, either
+  # directly or through a matching glob pattern.
+  def publish(channel, payload)
+    targets = @mutex.synchronize do
+      @subscriptions.filter_map do |socket, subs|
+        if subs[:channels].include?(channel)
+          [socket, encode(["message", channel, payload])]
+        elsif (pattern = subs[:patterns].find { |glob| File.fnmatch(glob, channel) })
+          [socket, encode(["pmessage", pattern, channel, payload])]
+        end
+      end
+    end
+    targets.each { |socket, frame| socket.write(frame) rescue nil }
+    targets.length
+  end
+
+  def disconnect_all
+    clients = @mutex.synchronize { @clients.dup }
+    clients.each { |client| client.close rescue nil }
   end
 
   def stop
@@ -47,12 +69,36 @@ class FakeRedisServer
   def serve(socket)
     while (command = read_command(socket))
       @mutex.synchronize { @commands << command }
-      socket.write(encode(@responder.call(command)))
+      reply = pubsub(socket, command) || encode(@responder.call(command))
+      socket.write(reply)
     end
   rescue IOError, SystemCallError
     nil
   ensure
+    @mutex.synchronize { @subscriptions.delete(socket) }
     socket.close rescue nil
+  end
+
+  # Minimal Pub/Sub state machine; returns nil for non Pub/Sub commands.
+  def pubsub(socket, command)
+    name, *args = command
+    kind = case name
+    when "SUBSCRIBE", "UNSUBSCRIBE" then :channels
+    when "PSUBSCRIBE", "PUNSUBSCRIBE" then :patterns
+    end
+    subs = @mutex.synchronize { @subscriptions[socket] }
+
+    if kind
+      subs ||= @mutex.synchronize { @subscriptions[socket] = { channels: [], patterns: [] } }
+      subscribing = name.start_with?("SUBSCRIBE", "PSUBSCRIBE")
+      args = subs[kind].dup if args.empty? && !subscribing
+      args.map do |arg|
+        subscribing ? (subs[kind] << arg unless subs[kind].include?(arg)) : subs[kind].delete(arg)
+        encode([name.downcase, arg, subs.values.sum(&:length)])
+      end.join
+    elsif subs && name == "PING"
+      encode(["pong", args.first || ""])
+    end
   end
 
   def read_command(socket)

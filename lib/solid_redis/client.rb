@@ -26,6 +26,34 @@ module SolidRedis
       end
     end
 
+    # Runs a blocking command such as BLPOP, BRPOP, BZPOPMIN or XREAD BLOCK.
+    #
+    # +timeout+ is the number of seconds Redis was asked to block for; the
+    # socket read timeout becomes +timeout+ plus the configured read timeout.
+    # Pass +nil+ or +0+ when Redis blocks indefinitely: the read then waits
+    # forever. The command is never retried after a connection error because
+    # the element may already have been consumed.
+    def blocking_call(timeout, *command)
+      blocking_call_v(timeout, command)
+    end
+
+    def blocking_call_v(timeout, command)
+      with_reconnect { connect unless connected? }
+
+      read_timeout = timeout && timeout.positive? ? timeout + @target.read_timeout : nil
+      begin
+        write(RESP.encode(command))
+        @reader.with_timeout(read_timeout) { @reader.read }
+      rescue ConnectionError, IO::WaitReadable, IO::WaitWritable, SystemCallError => error
+        close
+        config.reset if config.sentinel?
+        config.notify(:connection_error, error.class.name, error.message)
+        raise error if error.is_a?(Error)
+
+        raise ConnectionError, error.message, cause: error
+      end
+    end
+
     def pipelined(exception: true)
       pipeline = Pipeline.new
       yield pipeline

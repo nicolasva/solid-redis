@@ -6,17 +6,20 @@
 [![Documentation Status](https://img.shields.io/badge/docs-RubyDoc.info-blue.svg)](https://www.rubydoc.info/gems/solid-redis)
 
 `solid-redis` is a dependency-free Redis client designed around Ractor
-isolation. Its Redis and Sentinel specifications are immutable and shareable;
-every Ractor creates and retains its own resolution state, mutex, pool,
-clients, and sockets.
+isolation. Its Redis, Sentinel, and Cluster specifications are immutable and
+shareable; every Ractor creates and retains its own resolution state, slot
+table, mutex, pool, clients, and sockets.
 
-It does not depend on or patch `redis-client`.
+It supports standalone Redis, Sentinel failover, Redis Cluster routing,
+pipelines, blocking commands, and Pub/Sub. It does not depend on or patch
+`redis-client`.
 
 The implementation intentionally composes two small gems from the same
 author:
 
 - [`base-service`](https://github.com/nicolasva/base-service) executes each
-  Sentinel resolution and returns its immutable result and endpoint errors;
+  Sentinel resolution and Cluster topology discovery and returns its immutable
+  result and endpoint errors;
 - [`callback-collection`](https://github.com/nicolasva/callback-collection)
   provides immutable lifecycle event handlers.
 
@@ -175,6 +178,109 @@ The pool may be shared by threads in its owning Ractor. It must not be sent to
 another Ractor. Create a separate pool inside every Ractor, as in the example
 above.
 
+## Blocking commands
+
+`blocking_call(timeout, *command)` runs BLPOP, BRPOP, BZPOPMIN, XREAD BLOCK
+and similar commands. The socket read timeout becomes `timeout` plus the
+configured `read_timeout`; pass `nil` or `0` when Redis blocks indefinitely.
+
+```ruby
+pool.blocking_call(5, "BLPOP", "jobs", 5)   # => ["jobs", "payload"] or nil
+pool.blocking_call(nil, "BLPOP", "jobs", 0) # waits forever
+```
+
+A blocking command is never retried after a connection error, because the
+element may already have been consumed. While it waits, its connection stays
+checked out: size pools with room for concurrent blocking waiters plus regular
+traffic, and keep the pool `timeout` short so other threads fail fast instead
+of freezing.
+
+## Pub/Sub
+
+`new_subscription` opens a dedicated connection that belongs to the calling
+Ractor and is never taken from a pool.
+
+```ruby
+subscription = config.new_subscription
+subscription.subscribe("events").psubscribe("alerts.*")
+
+subscription.each_message(timeout: 1.0) do |message|
+  next if message.nil?          # timeout elapsed: check a stop flag here
+  next unless message.message?  # skip subscribe/unsubscribe/pong events
+
+  puts "#{message.channel}: #{message.payload}"
+end
+```
+
+`Message` is a frozen struct with `type` (`:message`, `:pmessage`,
+`:smessage`, `:subscribe`, `:psubscribe`, `:ssubscribe`, `:unsubscribe`,
+`:punsubscribe`, `:sunsubscribe`, `:pong`), `channel`, `pattern`, and
+`payload`. `next_message(timeout:)` returns one message or `nil`; `ping`
+sends a keepalive answered by a `:pong` message. Sharded channels use
+`ssubscribe`/`sunsubscribe`.
+
+After a connection loss the subscription reconnects according to
+`reconnect_attempts` and re-issues its tracked channels and patterns; the
+confirmations flow back as `:subscribe`/`:psubscribe` messages. Regular
+commands raise `SolidRedis::Error` on a subscription.
+
+The natural Ractor pattern is one listener Ractor fanning out plain Strings to
+workers:
+
+```ruby
+port = Ractor::Port.new # Ruby >= 4.0; use Ractor.yield/take on 3.x
+
+listener = Ractor.new(CONFIG, port) do |config, port|
+  subscription = config.new_subscription
+  subscription.subscribe("events")
+  subscription.each_message do |message|
+    port << [message.channel, message.payload].freeze if message&.message?
+  end
+end
+
+loop do
+  channel, payload = port.receive
+  # dispatch to application Ractors
+end
+```
+
+## Redis Cluster
+
+`SolidRedis.cluster` builds an immutable, shareable specification from seed
+nodes. Each Ractor discovers the slot table with `CLUSTER SLOTS` on first use
+and keeps it, together with one connection per node, in Ractor-local state.
+
+```ruby
+CLUSTER = SolidRedis.cluster(
+  nodes: ["redis://10.0.0.1:7000", "10.0.0.2:7000"],
+  password: ENV["REDIS_PASSWORD"],
+  timeout: 1.0,
+  max_redirections: 5
+)
+
+Ractor.shareable?(CLUSTER) # => true
+
+client = CLUSTER.new_client
+client.call("SET", "user:1", "Ada")
+client.call("GET", "user:1")
+client.call("MGET", "{user:1}.name", "{user:1}.email") # same slot via hash tag
+
+client.pipelined do |pipeline|
+  pipeline.call("GET", "a")   # commands are grouped per node,
+  pipeline.call("GET", "b")   # sent in parallel pipelines,
+  pipeline.call("PING")       # and results come back in order
+end
+
+pool = CLUSTER.new_pool(size: 5) # a pool of cluster clients
+```
+
+Routing uses CRC16 hash slots with `{hash tag}` support and knows the key
+position of EVAL/FCALL, XREAD/XREADGROUP, ZUNION-style and keyless commands.
+`MOVED` updates the local slot table; `ASK` is followed once with `ASKING`;
+`TRYAGAIN`/`CLUSTERDOWN` trigger a topology refresh. `CROSSSLOT` errors from
+Redis are raised as `SolidRedis::CommandError`. Cluster only supports database
+`0`; `blocking_call` is routed like any other command.
+
 ## Configuration
 
 Direct Redis options:
@@ -199,6 +305,10 @@ Direct Redis options:
 Sentinel additionally requires `name` and `sentinels`, and accepts `role`,
 `sentinel_username`, `sentinel_password`, `sentinel_ssl`, and
 `sentinel_ssl_params`. Sentinel defaults to two reconnect attempts.
+
+Cluster requires `nodes` (host:port strings, `redis://` URLs, or hashes) and
+accepts `max_redirections` (default `5`) plus the direct Redis options above
+except `db`, which must be `0`.
 
 All configuration is copied and deeply frozen. Proc credentials and mutable
 objects such as `OpenSSL::X509::Store` are rejected because Ruby cannot make
@@ -237,7 +347,7 @@ config = SolidRedis.sentinel(
 | `connected` | resolved server URL |
 | `disconnected` | resolved server URL |
 | `connection_error` | exception class name and message |
-| `resolved` | Sentinel name and resolved server URL |
+| `resolved` | Sentinel name and resolved server URL, or `"cluster"` and the node list |
 
 Method registration is required for a Ractor-shareable callback collection.
 Block callbacks retain mutable lexical context and are therefore rejected.
@@ -426,16 +536,21 @@ SolidRedis.config(
 
 ## Semantics and current scope
 
-- Clients, pools, sockets, mutexes, and Sentinel runtime state are never
-  shared between Ractors.
-- Multiple threads in one Ractor share one protected Sentinel resolution.
+- Clients, pools, sockets, mutexes, Sentinel runtime state, and Cluster slot
+  tables are never shared between Ractors.
+- Multiple threads in one Ractor share one protected Sentinel resolution or
+  Cluster topology.
 - Redis command errors are never retried.
 - Connection errors may retry a command according to `reconnect_attempts`.
   Applications requiring strict at-most-once semantics should set it to `0`.
+  Blocking commands and Pub/Sub never replay a command.
 - A pool waits up to its checkout timeout and then raises
   `SolidRedis::CheckoutTimeoutError`.
-- Pub/Sub, transactions, blocking-call helpers, cluster routing, middleware,
-  and an asynchronous actor pool are not part of version `0.1`.
+- Cluster clients follow up to `max_redirections` MOVED/ASK redirections and
+  refresh the topology on TRYAGAIN/CLUSTERDOWN, then raise
+  `SolidRedis::FailoverError`.
+- Transactions helpers (MULTI/EXEC/WATCH), Cluster replica reads, middleware,
+  and an asynchronous actor pool are not part of version `1.0`.
 
 ### Known CRuby limitation
 

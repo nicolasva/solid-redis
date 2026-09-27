@@ -37,6 +37,14 @@ module SolidRedis
       with { |client| client.call_v(command) }
     end
 
+    def blocking_call(timeout, *command)
+      with { |client| client.blocking_call_v(timeout, command) }
+    end
+
+    def blocking_call_v(timeout, command)
+      with { |client| client.blocking_call_v(timeout, command) }
+    end
+
     def pipelined(exception: true, &block)
       with { |client| client.pipelined(exception: exception, &block) }
     end

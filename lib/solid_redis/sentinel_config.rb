@@ -90,6 +90,10 @@ module SolidRedis
       Pool.new(self, **options)
     end
 
+    def new_subscription(**options)
+      Subscription.new(self, **options)
+    end
+
     def notify(event, *arguments)
       callbacks = redis_client_options[:callbacks]
       return unless callbacks&.respond_to?(event)

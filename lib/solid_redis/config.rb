@@ -89,6 +89,10 @@ module SolidRedis
       Pool.new(self, **options)
     end
 
+    def new_subscription(**options)
+      Subscription.new(self, **options)
+    end
+
     def notify(event, *arguments)
       return unless @callbacks&.respond_to?(event)
 

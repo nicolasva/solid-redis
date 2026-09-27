@@ -34,6 +34,29 @@ module SolidRedis
         @buffer = +""
       end
 
+      # Temporarily overrides the read timeout. +nil+ waits forever, which is
+      # what blocking commands such as BLPOP with a 0 timeout require.
+      def with_timeout(timeout)
+        previous = @read_timeout
+        @read_timeout = timeout
+        yield
+      ensure
+        @read_timeout = previous
+      end
+
+      # Waits until at least one byte is available without consuming it.
+      # Returns +false+ on timeout. Unlike a timed-out +read+, this never
+      # leaves a partially consumed frame behind, so it is the safe way to
+      # poll for the next Pub/Sub message.
+      def wait_readable(timeout)
+        return true unless @buffer.empty?
+        return true unless @io.respond_to?(:to_io)
+
+        !IO.select([@io], nil, nil, timeout).nil?
+      rescue IOError, SystemCallError => error
+        raise ConnectionError, error.message, cause: error
+      end
+
       def read(exception: true)
         case (type = read_bytes(1))
         when "+" then read_line
