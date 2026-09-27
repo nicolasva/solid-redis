@@ -2,6 +2,7 @@
 
 [![Build Status](https://github.com/nicolasva/solid-redis/actions/workflows/ci.yml/badge.svg)](https://github.com/nicolasva/solid-redis/actions/workflows/ci.yml)
 [![Gem Version](https://badge.fury.io/rb/solid-redis.svg)](https://rubygems.org/gems/solid-redis)
+[![Downloads](https://img.shields.io/gem/dt/solid-redis.svg)](https://rubygems.org/gems/solid-redis)
 [![Documentation Status](https://img.shields.io/badge/docs-RubyDoc.info-blue.svg)](https://www.rubydoc.info/gems/solid-redis)
 
 `solid-redis` is a dependency-free Redis client designed around Ractor
