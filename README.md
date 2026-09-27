@@ -120,7 +120,8 @@ workers = 4.times.map do
   end
 end
 
-workers.map(&:take) # => ["PONG", "PONG", "PONG", "PONG"]
+workers.map(&:value) # => ["PONG", "PONG", "PONG", "PONG"]
+# On Ruby 3.x, use workers.map(&:take) instead.
 ```
 
 Each Ractor resolves `mymaster` independently on first use. A connection error
@@ -245,6 +246,21 @@ Callback exceptions propagate to the caller.
   `SolidRedis::CheckoutTimeoutError`.
 - Pub/Sub, transactions, blocking-call helpers, cluster routing, middleware,
   and an asynchronous actor pool are not part of version `0.1`.
+
+### Known CRuby limitation
+
+Ractor support in CRuby is still experimental. On CRuby 3.4, running
+**multiple threads inside multiple Ractors simultaneously** can hang
+intermittently in the VM scheduler. This is reproducible with plain
+`Thread` + CPU work in bare Ractors, without solid-redis, and is fixed
+by the Ractor rewrite in CRuby >= 4.0 (verified by
+`test/ractor_stress_test.rb`, which is skipped on older Rubies).
+Safe patterns on CRuby 3.x:
+
+- one thread per Ractor (the natural Ractor model), or
+- multiple threads and a pool inside a single Ractor.
+
+Both are fully supported by this gem.
 
 An asynchronous `new_ractor_pool` would be a separate API: worker Ractors
 would own connections and exchange commands/results through messages or
