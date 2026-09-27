@@ -34,7 +34,7 @@ class SentinelConfigTest < Minitest::Test
       end
     end
 
-    assert_equal [["PONG", [nil, "127.0.0.1", @master.port]]] * 3, workers.map(&:take)
+    assert_equal [["PONG", [nil, "127.0.0.1", @master.port]]] * 3, workers.map { |w| ractor_result(w) }
     assert_equal 3, resolution_count
     assert_equal 3, @master.connection_count
   end
@@ -42,11 +42,12 @@ class SentinelConfigTest < Minitest::Test
   def test_reset_is_local_to_the_calling_ractor
     assert_equal @master.port, @config.port
 
-    worker_result = Ractor.new(@config) do |config|
+    worker = Ractor.new(@config) do |config|
       first = config.port
       config.reset
       [first, config.port]
-    end.take
+    end
+    worker_result = ractor_result(worker)
 
     assert_equal [@master.port, @master.port], worker_result
     assert_equal 3, resolution_count
