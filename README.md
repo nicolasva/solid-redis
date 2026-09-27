@@ -298,8 +298,9 @@ pool.close
 ### Pipelines and error handling
 
 `call` raises `SolidRedis::CommandError` on a Redis error reply. A pipeline
-sends all commands in one round trip, reads every reply, and then raises the
-first `CommandError` if any; the whole pipeline succeeds or raises.
+sends all commands in one round trip and reads every reply. By default it
+then raises the first `CommandError` if any; pass `exception: false` to get
+errors back in place and keep the other results.
 
 ```ruby
 client = SolidRedis.config(url: "redis://localhost:6379").new_client
@@ -325,6 +326,15 @@ begin
 rescue SolidRedis::CommandError => error
   error.message # => "ERR value is not an integer or out of range"
 end
+
+results = client.pipelined(exception: false) do |pipeline|
+  pipeline.call("SET", "counter", "abc")
+  pipeline.call("INCR", "counter")
+  pipeline.call("GET", "counter")
+end
+# => ["OK", #<SolidRedis::CommandError: ERR value is not an integer...>, "abc"]
+
+results.each { |result| raise result if result.is_a?(SolidRedis::CommandError) }
 ```
 
 ### Building commands dynamically

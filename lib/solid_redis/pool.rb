@@ -37,8 +37,8 @@ module SolidRedis
       with { |client| client.call_v(command) }
     end
 
-    def pipelined(&block)
-      with { |client| client.pipelined(&block) }
+    def pipelined(exception: true, &block)
+      with { |client| client.pipelined(exception: exception, &block) }
     end
 
     def close

@@ -26,7 +26,7 @@ module SolidRedis
       end
     end
 
-    def pipelined
+    def pipelined(exception: true)
       pipeline = Pipeline.new
       yield pipeline
       return [] if pipeline.commands.empty?
@@ -34,7 +34,9 @@ module SolidRedis
       with_reconnect do
         write(pipeline.commands.map { |command| RESP.encode(command) }.join)
         results = pipeline.commands.map { @reader.read(exception: false) }
-        raise results.find { |result| result.is_a?(CommandError) } if results.any?(CommandError)
+        if exception && (error = results.find { |result| result.is_a?(CommandError) })
+          raise error
+        end
 
         results
       end
