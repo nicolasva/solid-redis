@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.description = "Use immutable Redis configuration with isolated Sentinel state, pools, and sockets per Ractor."
   spec.homepage = "https://github.com/nicolasva/solid-redis"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2"
+  spec.required_ruby_version = ">= 3.1"
 
   spec.files = Dir["lib/**/*.rb", "README.md", "LICENSE.txt"]
   spec.require_paths = ["lib"]
