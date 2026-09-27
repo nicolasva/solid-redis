@@ -60,6 +60,12 @@ cross a Ractor boundary. Its first use in each Ractor creates a
 Sentinel connections are opened only while resolving a target and are then
 closed. Resolution is cached until `reset` or a connection/failover error.
 
+`SolidRedis::ClusterConfig` follows the same pattern: the shareable
+specification holds the seed nodes, and each Ractor keeps a
+`SolidRedis::ClusterState` with its slot table, one client per node, and its
+own mutex. `MOVED` replies update only the local table. Pub/Sub subscriptions
+and blocking commands likewise run on connections owned by the calling Ractor.
+
 ## Requirements
 
 Ruby **3.1 or newer** is required (tested on 3.1, 3.2, 3.3, 3.4, and 4.0).
