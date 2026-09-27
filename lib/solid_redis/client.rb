@@ -202,13 +202,18 @@ module SolidRedis
 
     def write(payload)
       offset = 0
+      deadline = nil
       while offset < payload.bytesize
-        unless IO.select(nil, [@socket], nil, @target.write_timeout)
-          raise TimeoutError, "Redis write timed out after #{@target.write_timeout}s"
+        chunk = offset.zero? ? payload : payload.byteslice(offset..)
+        written = @socket.write_nonblock(chunk, exception: false)
+        if written == :wait_writable
+          deadline ||= monotonic_time + @target.write_timeout
+          remaining = deadline - monotonic_time
+          if remaining <= 0 || !IO.select(nil, [@socket], nil, remaining)
+            raise TimeoutError, "Redis write timed out after #{@target.write_timeout}s"
+          end
+          next
         end
-
-        written = @socket.write_nonblock(payload.byteslice(offset..), exception: false)
-        next if written == :wait_writable
 
         offset += written
       end

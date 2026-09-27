@@ -69,8 +69,15 @@ class FakeRedisServer
   def serve(socket)
     while (command = read_command(socket))
       @mutex.synchronize { @commands << command }
-      reply = pubsub(socket, command) || encode(@responder.call(command))
-      socket.write(reply)
+      response = pubsub(socket, command)
+      encoded = !response.nil?
+      response ||= @responder.call(command)
+      if response.is_a?(Close)
+        socket.write(response.value) if response.value
+        break
+      end
+
+      socket.write(encoded ? response : encode(response))
     end
   rescue IOError, SystemCallError
     nil
@@ -140,4 +147,5 @@ class FakeRedisServer
   Simple = Struct.new(:value)
   Error = Struct.new(:value)
   Raw = Struct.new(:value)
+  Close = Struct.new(:value)
 end

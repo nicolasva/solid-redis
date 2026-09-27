@@ -7,13 +7,21 @@ module SolidRedis
     module_function
 
     def encode(command)
-      command = command.flatten(1)
-      raise ArgumentError, "Redis command cannot be empty" if command.empty?
+      length = command.sum { |argument| argument.is_a?(Array) ? argument.length : 1 }
+      raise ArgumentError, "Redis command cannot be empty" if length.zero?
 
-      command.each_with_object(+"*#{command.length}#{CRLF}") do |argument, buffer|
-        value = encode_argument(argument)
-        buffer << "$#{value.bytesize}#{CRLF}#{value}#{CRLF}"
+      command.each_with_object(+"*#{length}#{CRLF}") do |argument, buffer|
+        if argument.is_a?(Array)
+          argument.each { |value| append_argument(buffer, value) }
+        else
+          append_argument(buffer, argument)
+        end
       end
+    end
+
+    def append_argument(buffer, argument)
+      value = encode_argument(argument)
+      buffer << "$#{value.bytesize}#{CRLF}#{value}#{CRLF}"
     end
 
     def encode_argument(value)
@@ -32,6 +40,7 @@ module SolidRedis
         @io = io
         @read_timeout = read_timeout
         @buffer = +""
+        @offset = 0
       end
 
       # Temporarily overrides the read timeout. +nil+ waits forever, which is
@@ -49,7 +58,7 @@ module SolidRedis
       # leaves a partially consumed frame behind, so it is the safe way to
       # poll for the next Pub/Sub message.
       def wait_readable(timeout)
-        return true unless @buffer.empty?
+        return true if available_bytes.positive?
         return true unless @io.respond_to?(:to_io)
 
         !IO.select([@io], nil, nil, timeout).nil?
@@ -155,28 +164,30 @@ module SolidRedis
 
       def read_line
         loop do
-          if (index = @buffer.index(CRLF))
-            return @buffer.slice!(0, index + 2).byteslice(0, index)
+          if (index = @buffer.index(CRLF, @offset))
+            value = @buffer.byteslice(@offset, index - @offset)
+            @offset = index + 2
+            clear_consumed_buffer
+            return value
           end
           fill_buffer
         end
       end
 
       def read_bytes(length)
-        fill_buffer while @buffer.bytesize < length
-        @buffer.slice!(0, length)
+        fill_buffer while available_bytes < length
+        value = @buffer.byteslice(@offset, length)
+        @offset += length
+        clear_consumed_buffer
+        value
       end
 
       def fill_buffer
+        compact_buffer
         wait_for = :readable
+        deadline = nil
         loop do
           if @io.respond_to?(:to_io)
-            readers = wait_for == :readable ? [@io] : nil
-            writers = wait_for == :writable ? [@io] : nil
-            unless IO.select(readers, writers, nil, @read_timeout)
-              raise TimeoutError, "Redis read timed out after #{@read_timeout}s"
-            end
-
             chunk = @io.read_nonblock(16_384, exception: false)
           else
             chunk = @io.read(16_384)
@@ -184,6 +195,17 @@ module SolidRedis
 
           if chunk == :wait_readable || chunk == :wait_writable
             wait_for = chunk == :wait_readable ? :readable : :writable
+            deadline ||= monotonic_time + @read_timeout if @read_timeout
+            remaining = deadline && deadline - monotonic_time
+            if remaining && remaining <= 0
+              raise TimeoutError, "Redis read timed out after #{@read_timeout}s"
+            end
+
+            readers = wait_for == :readable ? [@io] : nil
+            writers = wait_for == :writable ? [@io] : nil
+            unless IO.select(readers, writers, nil, remaining)
+              raise TimeoutError, "Redis read timed out after #{@read_timeout}s"
+            end
             next
           end
           raise EOFError if chunk.nil?
@@ -193,6 +215,28 @@ module SolidRedis
         end
       rescue IOError, SystemCallError => error
         raise ConnectionError, error.message, cause: error
+      end
+
+      def available_bytes
+        @buffer.bytesize - @offset
+      end
+
+      def clear_consumed_buffer
+        return unless @offset == @buffer.bytesize
+
+        @buffer.clear
+        @offset = 0
+      end
+
+      def compact_buffer
+        return if @offset.zero?
+
+        @buffer = @buffer.byteslice(@offset..) || +""
+        @offset = 0
+      end
+
+      def monotonic_time
+        Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
       def error_response(message, exception)

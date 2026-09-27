@@ -14,6 +14,15 @@ class ConfigTest < Minitest::Test
     refute ssl_params.frozen?
   end
 
+  def test_memoizes_shareable_server_key
+    config = SolidRedis.config(host: "localhost", port: 6380)
+
+    assert_same config.server_key, config.server_key
+    assert_equal [nil, "localhost", 6380], config.server_key
+    assert config.server_key.frozen?
+    assert Ractor.shareable?(config.server_key)
+  end
+
   def test_parses_redis_url_without_exposing_credentials
     config = SolidRedis.config(url: "rediss://alice:s%40cret@example.com:6380/4")
 

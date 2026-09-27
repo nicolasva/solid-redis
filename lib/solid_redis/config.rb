@@ -56,6 +56,7 @@ module SolidRedis
       @ssl = !!ssl
       @ssl_params = Shareable.copy(ssl_params, label: "ssl_params") if ssl_params
       @callbacks = Shareable.copy(callbacks, label: "callbacks") if callbacks
+      @server_key = [@path, @host, @port].freeze
       Ractor.make_shareable(self)
     end
 
@@ -72,7 +73,7 @@ module SolidRedis
     end
 
     def server_key
-      [path, host, port].freeze
+      @server_key
     end
 
     def server_url

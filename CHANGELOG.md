@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.0.3] - 2026-09-27
 
+### Added
+
+- Deterministic fault-injection and bounded thread/Ractor stress tests in the
+  standard CI suite.
+- A dependency-free local throughput benchmark run by the default Rake task.
+- A reproducible real-Redis comparison with `redis-client` across 1/2/4/8
+  Ractors, pipelines, isolated pools, Cluster, and forced Sentinel failover,
+  including latency percentiles, CPU, RSS, allocations, and errors.
+
 ### Fixed
 
 - Consume complete RESP arrays, maps, sets, pushes, and attributes before
