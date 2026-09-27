@@ -592,26 +592,30 @@ Cluster rows compare `solid-redis` with `redis-cluster-client`, the
 Cluster implementation built on `redis-client`. Unsupported combinations
 are reported rather than replaced with a different concurrency model.
 
-**Environment:** Ruby 3.4.4 (arm64-darwin24); solid-redis 1.0.3; Redis server v=8.10.0 sha=00000000:1 malloc=libc bits=64 build=80fd3081013fc32b; redis-client 0.30.1; redis-cluster-client 0.17.1; Apple M2 Max, 12 logical CPUs, 96 GiB RAM, macOS 26.6.2.
+**Environment:** Ruby 3.4.4 (arm64-darwin24); solid-redis 1.0.4; Redis server v=8.10.0 sha=00000000:1 malloc=libc bits=64 build=80fd3081013fc32b; redis-client 0.30.1; redis-cluster-client 0.17.1; Apple M2 Max, 12 logical CPUs, 96 GiB RAM, macOS 26.6.2.
 
 Each row is measured in a fresh Ruby process. Both clients use RESP2,
 identical commands and the same local Redis topology. Client order is
-alternated between runs; values are medians of 5 runs.
+alternated between runs; values are medians of 6 runs.
 Regular workloads warm for 2 seconds and measure
 for 10 seconds. Pipeline latency is amortized
 per command (batch size 50). The isolated-pool scenario creates a
 five-connection pool inside each Ractor, warms it with
-1,000 PINGs, then measures 100,000
+1,000 PINGs, then measures
+100,000
 PINGs per Ractor.
 CPU is client-process CPU divided by wall time and may exceed 100% with
 multiple Ractors. Peak RSS excludes Redis server processes. Sentinel
 rows kill the master process 0.5 seconds after measurement starts and
 verify that every Ractor resumes on the promoted replica. Recovery is
-measured from the kill to each Ractor's first successful response.
+measured from each Ractor's first observed failure to its next successful
+response; failed commands are retried after a 10 ms backoff.
 Throughput counts successful commands; errors are failed commands
-observed during the measured interval. Allocation and RSS measurements
-include the identical latency-recording harness used for both clients, so
-they are comparative rather than intrinsic library-only costs.
+observed during the measured interval.
+Allocation and RSS measurements include the identical sampled-latency
+harness used for both clients, so they are comparative rather than
+intrinsic library-only costs. `redis-cluster-client` uses its default
+synchronous routing model (`concurrency: { model: :none }`).
 
 Reproduce the full run (requires `redis-server` and `redis-cli`):
 
@@ -623,66 +627,66 @@ BENCHMARK_README=README.md bundle exec rake benchmark:comparison
 
 | Ractors | Client | Throughput (ops/s) | p50 (ms) | p95 (ms) | p99 (ms) | CPU | Peak RSS | Allocations/op | Errors/run |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `redis-client` | 35,636 | 0.027 | 0.033 | 0.045 | 58.3% | 50.6 MiB | 17.4 | 0 |
-| 1 | `solid-redis` | 33,891 | 0.028 | 0.034 | 0.051 | 52.4% | 49.0 MiB | 28.9 | 0 |
-| 2 | `redis-client` | 53,941 | 0.035 | 0.049 | 0.069 | 114.6% | 58.6 MiB | 17.3 | 0 |
-| 2 | `solid-redis` | 56,594 | 0.033 | 0.045 | 0.090 | 104.7% | 57.9 MiB | 28.7 | 0 |
-| 4 | `redis-client` | 67,608 | 0.055 | 0.092 | 0.131 | 238.3% | 63.7 MiB | 17.3 | 0 |
-| 4 | `solid-redis` | 75,539 | 0.049 | 0.082 | 0.141 | 204.1% | 63.8 MiB | 28.5 | 0 |
-| 8 | `redis-client` | 48,828 | 0.078 | 0.171 | 0.236 | 268.5% | 75.4 MiB | 17.3 | 0 |
-| 8 | `solid-redis` | 80,691 | 0.087 | 0.172 | 0.267 | 431.4% | 69.5 MiB | 28.2 | 0 |
+| 1 | `redis-client` | 35,363 | 0.028 | 0.035 | 0.045 | 58.6% | 37.9 MiB | 17.4 | 0 |
+| 1 | `solid-redis` | 39,259 | 0.025 | 0.032 | 0.044 | 65.0% | 54.5 MiB | 19.9 | 0 |
+| 2 | `redis-client` | 53,847 | 0.036 | 0.050 | 0.073 | 114.4% | 38.0 MiB | 17.3 | 0 |
+| 2 | `solid-redis` | 58,259 | 0.033 | 0.047 | 0.095 | 112.6% | 54.5 MiB | 19.8 | 0 |
+| 4 | `redis-client` | 67,086 | 0.058 | 0.097 | 0.136 | 238.4% | 38.0 MiB | 17.3 | 0 |
+| 4 | `solid-redis` | 75,789 | 0.049 | 0.081 | 0.170 | 220.7% | 55.3 MiB | 19.6 | 0 |
+| 8 | `redis-client` | 48,938 | 0.083 | 0.180 | 0.249 | 267.7% | 38.7 MiB | 17.3 | 0 |
+| 8 | `solid-redis` | 84,294 | 0.085 | 0.169 | 0.274 | 479.1% | 65.1 MiB | 19.0 | 0 |
 
 ### Pipelines
 
 | Ractors | Client | Throughput (ops/s) | p50 (ms) | p95 (ms) | p99 (ms) | CPU | Peak RSS | Allocations/op | Errors/run |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `redis-client` | 262,482 | 0.004 | 0.005 | 0.007 | 81.5% | 39.5 MiB | 12.6 | 0 |
-| 1 | `solid-redis` | 317,150 | 0.003 | 0.004 | 0.006 | 77.9% | 41.0 MiB | 16.2 | 0 |
-| 2 | `redis-client` | 270,197 | 0.007 | 0.010 | 0.013 | 149.9% | 39.9 MiB | 12.5 | 0 |
-| 2 | `solid-redis` | 459,445 | 0.004 | 0.007 | 0.009 | 147.5% | 42.5 MiB | 15.9 | 0 |
-| 4 | `redis-client` | 222,813 | 0.017 | 0.025 | 0.031 | 282.8% | 40.0 MiB | 12.5 | 0 |
-| 4 | `solid-redis` | 464,640 | 0.008 | 0.014 | 0.017 | 251.9% | 43.2 MiB | 15.6 | 0 |
-| 8 | `redis-client` | 204,898 | 0.004 | 0.055 | 0.063 | 314.2% | 41.9 MiB | 12.5 | 0 |
-| 8 | `solid-redis` | 341,323 | 0.021 | 0.042 | 0.047 | 550.7% | 43.4 MiB | 15.5 | 0 |
+| 1 | `redis-client` | 261,689 | 0.004 | 0.005 | 0.007 | 81.0% | 37.9 MiB | 12.6 | 0 |
+| 1 | `solid-redis` | 329,512 | 0.003 | 0.004 | 0.005 | 76.8% | 40.5 MiB | 12.2 | 0 |
+| 2 | `redis-client` | 273,064 | 0.007 | 0.009 | 0.012 | 147.4% | 38.0 MiB | 12.5 | 0 |
+| 2 | `solid-redis` | 509,797 | 0.004 | 0.005 | 0.007 | 149.0% | 40.7 MiB | 12.0 | 0 |
+| 4 | `redis-client` | 226,198 | 0.017 | 0.023 | 0.029 | 282.3% | 38.3 MiB | 12.5 | 0 |
+| 4 | `solid-redis` | 609,096 | 0.006 | 0.011 | 0.013 | 272.3% | 41.0 MiB | 11.7 | 0 |
+| 8 | `redis-client` | 204,166 | 0.004 | 0.054 | 0.062 | 315.5% | 38.9 MiB | 12.5 | 0 |
+| 8 | `solid-redis` | 420,118 | 0.017 | 0.029 | 0.034 | 559.2% | 41.6 MiB | 11.6 | 0 |
 
 ### Isolated pool per Ractor
 
 | Ractors | Client | Throughput (ops/s) | p50 (ms) | p95 (ms) | p99 (ms) | CPU | Peak RSS | Allocations/op | Errors/run |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | 1 | `redis-client` | unsupported: Ractor::IsolationError (`connection_pool` uses non-shareable global state) | — | — | — | — | — | — | — |
-| 1 | `solid-redis` | 34,528 | 0.028 | 0.033 | 0.043 | 53.3% | 39.0 MiB | 25.0 | 0 |
+| 1 | `solid-redis` | 40,785 | 0.023 | 0.031 | 0.053 | 66.6% | 55.2 MiB | 17.0 | 0 |
 | 2 | `redis-client` | unsupported: Ractor::IsolationError (`connection_pool` uses non-shareable global state) | — | — | — | — | — | — | — |
-| 2 | `solid-redis` | 57,408 | 0.032 | 0.046 | 0.086 | 106.3% | 44.4 MiB | 24.8 | 0 |
+| 2 | `solid-redis` | 63,540 | 0.030 | 0.042 | 0.073 | 117.0% | 55.3 MiB | 16.9 | 0 |
 | 4 | `redis-client` | unsupported: Ractor::IsolationError (`connection_pool` uses non-shareable global state) | — | — | — | — | — | — | — |
-| 4 | `solid-redis` | 78,461 | 0.047 | 0.078 | 0.129 | 205.4% | 54.1 MiB | 24.6 | 0 |
+| 4 | `solid-redis` | 80,969 | 0.046 | 0.072 | 0.160 | 221.7% | 54.8 MiB | 16.6 | 0 |
 | 8 | `redis-client` | unsupported: Ractor::IsolationError (`connection_pool` uses non-shareable global state) | — | — | — | — | — | — | — |
-| 8 | `solid-redis` | 72,809 | 0.071 | 0.129 | 0.202 | 297.3% | 68.9 MiB | 24.4 | 0 |
+| 8 | `solid-redis` | 74,339 | 0.068 | 0.163 | 0.351 | 334.1% | 62.3 MiB | 16.3 | 0 |
 
 ### Cluster
 
 | Ractors | Client | Throughput (ops/s) | p50 (ms) | p95 (ms) | p99 (ms) | CPU | Peak RSS | Allocations/op | Errors/run |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `redis-client` | 29,071 | 0.033 | 0.040 | 0.051 | 64.8% | 48.8 MiB | 19.4 | 0 |
-| 1 | `solid-redis` | 29,213 | 0.033 | 0.038 | 0.056 | 57.1% | 47.6 MiB | 34.9 | 0 |
-| 2 | `redis-client` | 50,333 | 0.037 | 0.051 | 0.078 | 124.7% | 57.8 MiB | 19.3 | 0 |
-| 2 | `solid-redis` | 51,805 | 0.036 | 0.050 | 0.097 | 117.2% | 57.0 MiB | 34.7 | 0 |
-| 4 | `redis-client` | 60,752 | 0.062 | 0.099 | 0.139 | 252.6% | 62.5 MiB | 19.3 | 0 |
-| 4 | `solid-redis` | 66,626 | 0.055 | 0.089 | 0.152 | 225.9% | 61.2 MiB | 34.4 | 0 |
-| 8 | `redis-client` | 43,258 | 0.089 | 0.186 | 0.253 | 278.1% | 75.4 MiB | 19.3 | 0 |
-| 8 | `solid-redis` | 48,644 | 0.079 | 0.154 | 0.248 | 241.4% | 74.7 MiB | 34.3 | 0 |
+| 1 | `redis-client` | 28,804 | 0.034 | 0.042 | 0.059 | 64.2% | 38.4 MiB | 19.4 | 0 |
+| 1 | `solid-redis` | 29,651 | 0.032 | 0.040 | 0.065 | 63.1% | 54.1 MiB | 24.9 | 0 |
+| 2 | `redis-client` | 49,533 | 0.039 | 0.055 | 0.091 | 124.1% | 37.6 MiB | 19.3 | 0 |
+| 2 | `solid-redis` | 51,253 | 0.037 | 0.052 | 0.105 | 121.0% | 54.2 MiB | 24.8 | 0 |
+| 4 | `redis-client` | 60,385 | 0.064 | 0.103 | 0.149 | 251.9% | 40.2 MiB | 19.3 | 0 |
+| 4 | `solid-redis` | 66,630 | 0.056 | 0.088 | 0.175 | 242.5% | 57.2 MiB | 24.5 | 0 |
+| 8 | `redis-client` | 43,361 | 0.095 | 0.195 | 0.275 | 277.5% | 44.0 MiB | 19.3 | 0 |
+| 8 | `solid-redis` | 47,102 | 0.077 | 0.198 | 0.415 | 251.3% | 58.0 MiB | 24.2 | 0 |
 
 ### Sentinel master crash
 
 | Ractors | Client | Throughput (ops/s) | p50 (ms) | p95 (ms) | p99 (ms) | Recovery p50 (ms) | Recovery max (ms) | CPU | Peak RSS | Allocations/op | Errors/run |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `redis-client` | 29,378 | 0.028 | 0.035 | 0.046 | 1333.8 | 1333.8 | 61.9% | 52.3 MiB | 20.1 | 2050 |
-| 1 | `solid-redis` | 28,794 | 0.029 | 0.035 | 0.050 | 1319.1 | 1319.1 | 55.5% | 48.3 MiB | 33.3 | 2090 |
-| 2 | `redis-client` | 30,829 | 0.036 | 0.049 | 0.070 | 4242.9 | 4243.0 | 87.8% | 53.4 MiB | 20.4 | 3080 |
-| 2 | `solid-redis` | 31,074 | 0.033 | 0.045 | 0.093 | 4440.4 | 4451.4 | 77.3% | 50.3 MiB | 33.1 | 2202 |
-| 4 | `redis-client` | 36,404 | 0.054 | 0.093 | 0.131 | 4302.8 | 4870.8 | 157.2% | 58.0 MiB | 20.5 | 3113 |
-| 4 | `solid-redis` | 41,080 | 0.048 | 0.081 | 0.136 | 4802.3 | 4962.6 | 132.6% | 56.0 MiB | 32.0 | 2251 |
-| 8 | `redis-client` | 48,133 | 0.117 | 0.219 | 0.297 | 2278.4 | 2741.5 | 434.1% | 61.5 MiB | 19.7 | 3114 |
-| 8 | `solid-redis` | 63,627 | 0.087 | 0.171 | 0.277 | 2073.7 | 2085.0 | 374.0% | 64.4 MiB | 30.6 | 2268 |
+| 1 | `redis-client` | 29,749 | 0.028 | 0.037 | 0.052 | 1321.9 | 1321.9 | 52.8% | 41.9 MiB | 17.6 | 99 |
+| 1 | `solid-redis` | 32,279 | 0.026 | 0.034 | 0.050 | 1313.3 | 1313.3 | 57.0% | 69.5 MiB | 20.1 | 96 |
+| 2 | `redis-client` | 46,483 | 0.036 | 0.050 | 0.075 | 1307.7 | 1311.9 | 101.9% | 42.0 MiB | 17.5 | 202 |
+| 2 | `solid-redis` | 50,273 | 0.033 | 0.045 | 0.098 | 1344.3 | 1344.4 | 99.5% | 69.6 MiB | 20.0 | 206 |
+| 4 | `redis-client` | 58,224 | 0.058 | 0.095 | 0.132 | 1319.1 | 1319.1 | 212.7% | 41.8 MiB | 17.6 | 386 |
+| 4 | `solid-redis` | 66,969 | 0.049 | 0.078 | 0.154 | 1341.8 | 1341.8 | 196.9% | 69.4 MiB | 19.9 | 398 |
+| 8 | `redis-client` | 53,640 | 0.124 | 0.229 | 0.305 | 1342.8 | 1343.1 | 474.6% | 42.2 MiB | 17.7 | 679 |
+| 8 | `solid-redis` | 72,816 | 0.086 | 0.172 | 0.289 | 1349.4 | 1353.1 | 421.7% | 64.5 MiB | 19.5 | 687 |
 <!-- benchmark-results:end -->
 
 ## Development

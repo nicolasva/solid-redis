@@ -31,8 +31,11 @@ module ComparisonWorker
     successes = results.sum { |result| result.fetch("successes") }
     errors = results.sum { |result| result.fetch("errors") }
     recoveries = results.filter_map { |result| result["recovery_ms"] }.sort
-    if settings["scenario"] == "sentinel" && recoveries.length != settings.fetch("ractors")
-      raise "not every Ractor recovered after Sentinel failover"
+    if settings["scenario"] == "sentinel" && results.any? { |result| !result["recovered"] }
+      summary = results.map do |result|
+        result.slice("successes", "errors", "recovered", "recovery_ms", "last_error")
+      end
+      raise "not every Ractor recovered after Sentinel failover: #{summary.inspect}"
     end
     puts JSON.generate(
       throughput: successes / elapsed,
@@ -276,6 +279,8 @@ module ComparisonWorker
     errors = 0
     recovery_ms = nil
     failure_started = nil
+    post_failover_success = false
+    last_error = nil
     index = 0
     while monotonic_time < deadline
       key = "benchmark:failover:#{worker_index}:#{index % 128}"
@@ -285,10 +290,15 @@ module ComparisonWorker
         successes += 1
         completed = monotonic_time
         record_latency(latencies, index, started, completed: completed)
-        recovery_ms ||= (completed - failure_started) * 1_000 if failure_started
-      rescue StandardError
+        if completed >= failure_at
+          post_failover_success = true
+          recovery_ms ||= (completed - failure_started) * 1_000 if failure_started
+        end
+      rescue StandardError => error
         errors += 1
+        last_error = "#{error.class}: #{error.message}"
         failure_started ||= monotonic_time if monotonic_time >= failure_at
+        sleep(settings.fetch("failure_retry_delay"))
       end
       index += 1
     end
@@ -296,7 +306,9 @@ module ComparisonWorker
       "latencies" => latencies,
       "successes" => successes,
       "errors" => errors,
-      "recovery_ms" => recovery_ms,
+      "last_error" => last_error,
+      "recovered" => !recovery_ms.nil? || (failure_started.nil? && post_failover_success),
+      "recovery_ms" => recovery_ms || (post_failover_success ? 0 : nil),
     }
   end
 

@@ -221,10 +221,15 @@ class RedisBenchmarkTopology
   end
 
   def reserve_port
-    server = TCPServer.new("127.0.0.1", 0)
-    server.local_address.ip_port
-  ensure
-    server&.close
+    loop do
+      port = rand(10_000..19_999)
+      server = TCPServer.new("127.0.0.1", port)
+      return port
+    rescue Errno::EADDRINUSE
+      next
+    ensure
+      server&.close
+    end
   end
 
   def reserve_cluster_port
@@ -304,6 +309,7 @@ class ComparisonBenchmark
       "pool_warmup_operations" => @pool_warmup_operations,
       "pool_operations" => @pool_operations,
       "failover_delay" => 0.5,
+      "failure_retry_delay" => 0.01,
       "sentinel_master_pid" => @topology.sentinel_master_pid,
       "standalone_url" => @topology.standalone_url,
       "cluster_urls" => @topology.cluster_urls,
@@ -407,7 +413,7 @@ class ComparisonBenchmark
       rows kill the master process 0.5 seconds after measurement starts and
       verify that every Ractor resumes on the promoted replica. Recovery is
       measured from each Ractor's first observed failure to its next successful
-      response.
+      response; failed commands are retried after a 10 ms backoff.
       Throughput counts successful commands; errors are failed commands
       observed during the measured interval.
       Allocation and RSS measurements include the identical sampled-latency
