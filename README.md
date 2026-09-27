@@ -56,6 +56,14 @@ cross a Ractor boundary. Its first use in each Ractor creates a
 Sentinel connections are opened only while resolving a target and are then
 closed. Resolution is cached until `reset` or a connection/failover error.
 
+## Requirements
+
+Ruby **3.1 or newer** is required (tested on 3.1, 3.2, 3.3, 3.4, and 4.0).
+Ruby 2.7 and 3.0 are not supported: the `Ractor` API this gem is built on
+was introduced in 3.0, and the per-Ractor storage semantics are verified
+from 3.1 onwards. Ruby >= 4.0 is recommended for workloads that run several
+threads inside several Ractors (see the CRuby limitation below).
+
 ## Installation
 
 ```ruby
@@ -276,6 +284,7 @@ bundle exec rake
 ```
 
 The default task runs the Minitest suite and builds the gem in `pkg/`.
+CI runs the suite on Ruby 3.1 through 4.0.
 
 ## Publishing
 
