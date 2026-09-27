@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.4] - 2026-09-27
+
+### Changed
+
+- Cache the immutable server key instead of allocating it on every Cluster
+  lookup.
+- Encode one-level nested command arguments without creating an intermediate
+  flattened array.
+- Parse RESP data with a buffer cursor and compact only when another socket
+  read is required, reducing response-parser allocations.
+- Attempt non-blocking socket reads and writes before waiting with `IO.select`,
+  while preserving read/write deadlines when the socket would block.
+
 ## [1.0.3] - 2026-09-27
 
 ### Added
@@ -100,6 +113,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   TLS, reconnection), `Pool` owned by a single Ractor, pipelines, and
   lifecycle callbacks via `callback-collection`.
 
+[1.0.4]: https://github.com/nicolasva/solid-redis/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/nicolasva/solid-redis/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/nicolasva/solid-redis/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/nicolasva/solid-redis/compare/v1.0.0...v1.0.1
