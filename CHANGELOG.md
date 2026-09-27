@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-09-27
+
+### Fixed
+
+- Consume complete RESP arrays, maps, sets, pushes, and attributes before
+  raising nested Redis errors, preventing connection desynchronization.
+- Handle `:wait_writable` during non-blocking reads and discard connections
+  after protocol errors without replaying commands.
+- Retry `TRYAGAIN` and `CLUSTERDOWN` pipeline replies consistently with direct
+  Cluster calls, and clear `ASKING` state before refreshing the topology.
+- Route `MEMORY USAGE` to the node owning its key.
+- Preserve an explicitly configured `db` when a Redis URL is also provided.
+
+### Changed
+
+- Clarify that Cluster commands are grouped into per-node pipelines rather
+  than sent concurrently.
+
 ## [1.0.2] - 2026-09-27
 
 ### Added
@@ -73,6 +91,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   TLS, reconnection), `Pool` owned by a single Ractor, pipelines, and
   lifecycle callbacks via `callback-collection`.
 
+[1.0.3]: https://github.com/nicolasva/solid-redis/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/nicolasva/solid-redis/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/nicolasva/solid-redis/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/nicolasva/solid-redis/compare/v0.2.1...v1.0.0
