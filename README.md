@@ -617,10 +617,21 @@ harness used for both clients, so they are comparative rather than
 intrinsic library-only costs. `redis-cluster-client` uses its default
 synchronous routing model (`concurrency: { model: :none }`).
 
-Reproduce the full run (requires `redis-server` and `redis-cli`):
+The benchmark suite now lives in the separate `bench_mark_redis` project.
+From a checkout where both repositories are siblings, run the full matrix
+(requires `redis-server` and `redis-cli`) with:
 
 ```sh
-BENCHMARK_README=README.md bundle exec rake benchmark:comparison
+cd ../bench_mark_redis
+SOLID_REDIS_PATH=../solid-redis bundle install
+bundle exec rake comparison
+```
+
+To regenerate this README's benchmark tables:
+
+```sh
+cd ../bench_mark_redis
+BENCHMARK_README=../solid-redis/README.md bundle exec rake comparison
 ```
 
 ### GET / SET
@@ -696,14 +707,18 @@ bundle install
 bundle exec rake
 ```
 
-The default task runs the Minitest suite, a deterministic local throughput
-benchmark, and builds the gem in `pkg/`. CI runs all three on Ruby 3.1 through
-4.0. The test suite includes bounded thread/Ractor stress and fault injection
-for truncated responses, timeouts, reconnects, Sentinel, and Cluster errors.
-Run only the benchmark with:
+The default task runs the Minitest suite and builds the gem in `pkg/`. CI runs
+both on Ruby 3.1 through 4.0. The test suite includes bounded thread/Ractor
+stress and fault injection for truncated responses, timeouts, reconnects,
+Sentinel, and Cluster errors.
+
+Benchmarks and their comparison-only dependencies are maintained in the
+sibling `bench_mark_redis` project. Run its short throughput smoke test with:
 
 ```sh
-bundle exec rake benchmark
+cd ../bench_mark_redis
+SOLID_REDIS_PATH=../solid-redis bundle install
+bundle exec rake throughput
 ```
 
 The suite needs no running Redis: it uses an in-process fake server
