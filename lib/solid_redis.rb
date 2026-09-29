@@ -2,6 +2,7 @@
 
 require "base_service"
 require "callback_collection"
+require "solid_resp_ractor"
 
 require_relative "solid_redis/version"
 require_relative "solid_redis/errors"

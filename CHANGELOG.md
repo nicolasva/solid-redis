@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- Use `solid-resp-ractor` for RESP2/RESP3 encoding and parsing while
+  preserving SolidRedis's existing error classes and `SolidRedis::RESP`
+  compatibility API.
+
 ## [1.0.7] - 2026-09-29
 
 ### Changed
