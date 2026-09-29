@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.6] - 2026-09-29
+
+### Changed
+
+- Move the benchmark harness to its own standalone project.
+- Remove benchmark-only development dependencies and tasks from SolidRedis.
+- Keep the standard CI workflow focused on tests and gem construction.
+
 ## [1.0.5] - 2026-09-28
 
 ### Changed
@@ -123,6 +131,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   TLS, reconnection), `Pool` owned by a single Ractor, pipelines, and
   lifecycle callbacks via `callback-collection`.
 
+[1.0.6]: https://github.com/nicolasva/solid-redis/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/nicolasva/solid-redis/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/nicolasva/solid-redis/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/nicolasva/solid-redis/compare/v1.0.2...v1.0.3
