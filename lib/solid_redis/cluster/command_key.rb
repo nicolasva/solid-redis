@@ -28,7 +28,7 @@ module SolidRedis
 
       # Returns the first key of +command+, or nil for keyless commands.
       def for(command)
-        name = command[0].to_s.upcase
+        name = normalize_name(command[0])
         return if KEYLESS[name]
 
         if (index = NUMKEYS_AT[name])
@@ -47,6 +47,18 @@ module SolidRedis
         when "MIGRATE" then command[3].to_s.empty? ? nil : command[3]
         else command[1]
         end
+      end
+
+      def normalize_name(value)
+        name = value.to_s
+        index = 0
+        while index < name.bytesize
+          byte = name.getbyte(index)
+          return name.upcase if byte >= 97 && byte <= 122
+
+          index += 1
+        end
+        name
       end
     end
   end

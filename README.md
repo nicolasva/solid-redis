@@ -594,6 +594,10 @@ are reported rather than replaced with a different concurrency model.
 
 **Environment:** Ruby 4.0.1 (arm64-darwin25); solid-redis 1.0.9; Redis server v=8.10.0 sha=00000000:1 malloc=libc bits=64 build=80fd3081013fc32b; redis-client 0.30.1; redis-cluster-client 0.17.1; Apple M2 Max, 12 logical CPUs, 96 GiB RAM, macOS 26.6.2.
 
+GET/SET and Cluster rows for 1, 2, and 4 Ractors were refreshed from the
+current checkout with the unreleased routing and RESP buffer optimizations.
+The remaining rows come from the preceding full-matrix run.
+
 Each row is measured in a fresh Ruby process. Both clients use RESP2,
 identical commands and the same local Redis topology. Client order is
 alternated between runs; values are medians of 6 runs.
@@ -627,12 +631,12 @@ BENCHMARK_README=README.md bundle exec rake benchmark:comparison
 
 | Ractors | Client | Throughput (ops/s) | p50 (ms) | p95 (ms) | p99 (ms) | CPU | Peak RSS | Allocations/op | Errors/run |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `redis-client` | 36,894 | 0.027 | 0.033 | 0.043 | 58.3% | 39.1 MiB | 17.4 | 0 |
-| 1 | `solid-redis` | 37,616 | 0.026 | 0.034 | 0.045 | 68.3% | 69.4 MiB | 19.9 | 0 |
-| 2 | `redis-client` | 59,568 | 0.033 | 0.042 | 0.056 | 107.1% | 40.0 MiB | 17.4 | 0 |
-| 2 | `solid-redis` | 61,699 | 0.032 | 0.042 | 0.056 | 119.2% | 81.3 MiB | 19.9 | 0 |
-| 4 | `redis-client` | 83,574 | 0.046 | 0.069 | 0.100 | 197.3% | 40.3 MiB | 17.4 | 0 |
-| 4 | `solid-redis` | 79,458 | 0.047 | 0.073 | 0.138 | 209.3% | 85.0 MiB | 19.9 | 0 |
+| 1 | `redis-client` | 35,899 | 0.028 | 0.036 | 0.047 | 57.8% | 42.5 MiB | 17.4 | 0 |
+| 1 | `solid-redis` | 38,329 | 0.025 | 0.035 | 0.045 | 66.7% | 117.1 MiB | 10.4 | 0 |
+| 2 | `redis-client` | 57,092 | 0.034 | 0.047 | 0.060 | 105.0% | 42.7 MiB | 17.4 | 0 |
+| 2 | `solid-redis` | 59,489 | 0.032 | 0.047 | 0.059 | 115.9% | 131.1 MiB | 10.4 | 0 |
+| 4 | `redis-client` | 83,927 | 0.046 | 0.068 | 0.098 | 198.4% | 42.8 MiB | 17.4 | 0 |
+| 4 | `solid-redis` | 83,164 | 0.046 | 0.068 | 0.094 | 211.6% | 130.5 MiB | 10.4 | 0 |
 | 8 | `redis-client` | 105,129 | 0.069 | 0.119 | 0.213 | 360.8% | 41.3 MiB | 17.4 | 0 |
 | 8 | `solid-redis` | 99,759 | 0.070 | 0.128 | 0.267 | 378.0% | 97.7 MiB | 19.8 | 0 |
 
@@ -666,12 +670,12 @@ BENCHMARK_README=README.md bundle exec rake benchmark:comparison
 
 | Ractors | Client | Throughput (ops/s) | p50 (ms) | p95 (ms) | p99 (ms) | CPU | Peak RSS | Allocations/op | Errors/run |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `redis-client` | 29,214 | 0.033 | 0.042 | 0.057 | 62.3% | 41.1 MiB | 19.4 | 0 |
-| 1 | `solid-redis` | 27,697 | 0.035 | 0.043 | 0.065 | 62.6% | 73.3 MiB | 24.9 | 0 |
-| 2 | `redis-client` | 53,549 | 0.036 | 0.048 | 0.069 | 118.0% | 40.3 MiB | 19.4 | 0 |
-| 2 | `solid-redis` | 51,153 | 0.037 | 0.049 | 0.070 | 121.1% | 73.6 MiB | 24.9 | 0 |
-| 4 | `redis-client` | 77,049 | 0.050 | 0.070 | 0.099 | 216.8% | 44.5 MiB | 19.4 | 0 |
-| 4 | `solid-redis` | 75,593 | 0.050 | 0.070 | 0.135 | 228.3% | 78.9 MiB | 24.9 | 0 |
+| 1 | `redis-client` | 29,459 | 0.033 | 0.042 | 0.057 | 62.4% | 42.6 MiB | 19.4 | 0 |
+| 1 | `solid-redis` | 30,041 | 0.033 | 0.040 | 0.053 | 59.8% | 116.4 MiB | 11.4 | 0 |
+| 2 | `redis-client` | 51,845 | 0.037 | 0.052 | 0.070 | 115.1% | 42.8 MiB | 19.4 | 0 |
+| 2 | `solid-redis` | 54,065 | 0.035 | 0.050 | 0.063 | 115.4% | 126.3 MiB | 11.4 | 0 |
+| 4 | `redis-client` | 76,652 | 0.051 | 0.070 | 0.097 | 217.3% | 47.6 MiB | 19.4 | 0 |
+| 4 | `solid-redis` | 78,763 | 0.049 | 0.069 | 0.091 | 220.1% | 128.5 MiB | 11.4 | 0 |
 | 8 | `redis-client` | 108,022 | 0.069 | 0.109 | 0.156 | 420.5% | 49.1 MiB | 19.4 | 0 |
 | 8 | `solid-redis` | 98,677 | 0.072 | 0.127 | 0.302 | 433.3% | 86.9 MiB | 24.8 | 0 |
 

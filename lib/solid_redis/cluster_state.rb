@@ -19,14 +19,17 @@ module SolidRedis
     # Returns the master Config owning +slot+, discovering the topology when
     # it is not known yet.
     def node_for_slot(slot)
+      node = @slots[slot]
+      return node if node
+
       @mutex.synchronize do
         discover unless @discovered
-        key = @slots[slot]
-        if key.nil?
+        node = @slots[slot]
+        if node.nil?
           discover
-          key = @slots[slot]
+          node = @slots[slot]
         end
-        @nodes[key] || raise(ConnectionError, "No cluster node serves slot #{slot}")
+        node || raise(ConnectionError, "No cluster node serves slot #{slot}")
       end
     end
 
@@ -45,9 +48,9 @@ module SolidRedis
     def move(slot, host, port)
       @mutex.synchronize do
         key = node_key(host, port)
-        @nodes[key] ||= node_config(host, port)
-        @slots[slot] = key
-        @nodes[key]
+        node = @nodes[key] ||= node_config(host, port)
+        @slots[slot] = node
+        node
       end
     end
 
@@ -83,8 +86,8 @@ module SolidRedis
       @nodes.clear
       result.result[:ranges].each do |range|
         key = node_key(range[:master][:host], range[:master][:port])
-        @nodes[key] ||= node_config(range[:master][:host], range[:master][:port])
-        (range[:from]..range[:to]).each { |slot| @slots[slot] = key }
+        node = @nodes[key] ||= node_config(range[:master][:host], range[:master][:port])
+        (range[:from]..range[:to]).each { |slot| @slots[slot] = node }
       end
       @discovered = true
       @specification.notify(:resolved, "cluster", @nodes.keys.join(","))

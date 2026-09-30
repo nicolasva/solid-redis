@@ -19,7 +19,17 @@ module SolidRedis
       module_function
 
       def for(key)
-        crc16(hash_tag(key.to_s)) % SLOTS
+        string = key.to_s
+        first = 0
+        last = string.bytesize
+        if (open = string.index("{")) &&
+            (close = string.index("}", open + 1)) &&
+            close > open + 1
+          first = open + 1
+          last = close
+        end
+
+        crc16_range(string, first, last) % SLOTS
       end
 
       def hash_tag(key)
@@ -33,9 +43,17 @@ module SolidRedis
       end
 
       def crc16(string)
-        string.each_byte.reduce(0) do |crc, byte|
-          ((crc << 8) & 0xFFFF) ^ TABLE[((crc >> 8) ^ byte) & 0xFF]
+        crc16_range(string, 0, string.bytesize)
+      end
+
+      def crc16_range(string, first, last)
+        crc = 0
+        while first < last
+          byte = string.getbyte(first)
+          crc = ((crc << 8) & 0xFFFF) ^ TABLE[((crc >> 8) ^ byte) & 0xFF]
+          first += 1
         end
+        crc
       end
     end
   end

@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.10] - 2026-09-30
+
+### Changed
+
+- Require `solid-resp-ractor` 0.1.3 for lower-allocation command encoding,
+  response parsing, and socket readiness waits.
+- Remove transient allocations from Cluster command normalization and CRC16
+  slot calculation.
+- Cache Cluster state and bounded key-to-slot lookups, store configurations
+  directly in the slot table, and avoid locking stable slot reads.
+- Improve Cluster throughput by 2.0% to 4.3% over `redis-cluster-client`
+  across 1, 2, and 4 Ractors in the six-run benchmark, with approximately 41%
+  fewer allocations per operation.
+
 ## [1.0.9] - 2026-09-29
 
 ### Changed
@@ -154,6 +168,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   TLS, reconnection), `Pool` owned by a single Ractor, pipelines, and
   lifecycle callbacks via `callback-collection`.
 
+[1.0.10]: https://github.com/nicolasva/solid-redis/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/nicolasva/solid-redis/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/nicolasva/solid-redis/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/nicolasva/solid-redis/compare/v1.0.6...v1.0.7

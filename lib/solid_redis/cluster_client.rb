@@ -7,6 +7,7 @@ module SolidRedis
   class ClusterClient
     REDIRECTION = /\A(MOVED|ASK) (\d+) (\S+):(\d+)\z/
     RETRY_DELAY = 0.05
+    SLOT_CACHE_LIMIT = 1_024
     TRANSIENT_ERRORS = %w[TRYAGAIN CLUSTERDOWN].freeze
 
     attr_reader :config
@@ -15,6 +16,8 @@ module SolidRedis
       @config = config
       @name = name
       @clients = {}
+      @slot_cache = {}
+      @state = config.state
     end
 
     def call(*command)
@@ -104,14 +107,14 @@ module SolidRedis
           host = redirection[3]
           port = Integer(redirection[4])
           asking = redirection[1] == "ASK"
-          node = asking ? config.state.node(host, port) : config.state.move(slot, host, port)
+          node = asking ? @state.node(host, port) : @state.move(slot, host, port)
         elsif error.message.start_with?("TRYAGAIN", "CLUSTERDOWN")
           redirections += 1
           raise FailoverError, "Cluster unavailable: #{error.message}" if redirections > config.max_redirections
 
           asking = false
           sleep RETRY_DELAY
-          config.state.refresh
+          @state.refresh
           node = node_for(command)
         else
           raise
@@ -122,14 +125,23 @@ module SolidRedis
 
         attempts += 1
         config.notify(:connection_error, error.class.name, error.message)
-        config.state.refresh
+        @state.refresh
         node = node_for(command)
       end
     end
 
     def node_for(command)
       key = Cluster::CommandKey.for(command)
-      key ? config.state.node_for_slot(Cluster::KeySlot.for(key)) : config.state.any_node
+      return @state.any_node unless key
+
+      slot = @slot_cache[key]
+      unless slot
+        slot = Cluster::KeySlot.for(key)
+        @slot_cache.clear if @slot_cache.length >= SLOT_CACHE_LIMIT
+        cached_key = key.is_a?(String) && !key.frozen? ? key.dup.freeze : key
+        @slot_cache[cached_key] = slot
+      end
+      @state.node_for_slot(slot)
     end
 
     def transient_error?(error)
