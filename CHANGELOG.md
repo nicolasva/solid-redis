@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.11] - 2026-10-01
 
 ### Changed
 
@@ -175,6 +175,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   TLS, reconnection), `Pool` owned by a single Ractor, pipelines, and
   lifecycle callbacks via `callback-collection`.
 
+[1.0.11]: https://github.com/nicolasva/solid-redis/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/nicolasva/solid-redis/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/nicolasva/solid-redis/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/nicolasva/solid-redis/compare/v1.0.7...v1.0.8
