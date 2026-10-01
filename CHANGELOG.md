@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Require `solid-resp-ractor` 0.1.4 to reuse the non-blocking socket read
+  buffer and reduce response-read allocations.
+
 ## [1.0.10] - 2026-09-30
 
 ### Changed

@@ -71,11 +71,13 @@ class RESPTest < Minitest::Test
       @reader
     end
 
-    def read_nonblock(_length, exception:)
+    def read_nonblock(_length, buffer, exception:)
       raise ArgumentError, "expected exception: false" unless exception == false
 
       @attempts += 1
-      @attempts == 1 ? :wait_writable : @payload
+      return :wait_writable if @attempts == 1
+
+      buffer.replace(@payload)
     end
 
     def close
