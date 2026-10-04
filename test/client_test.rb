@@ -30,6 +30,16 @@ class ClientTest < Minitest::Test
     client&.close
   end
 
+  def test_disables_nagle_on_tcp_connections
+    client = SolidRedis.config(port: @server.port).new_client
+    client.call("PING")
+    socket = client.instance_variable_get(:@socket)
+
+    assert socket.getsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY).bool
+  ensure
+    client&.close
+  end
+
   def test_pipeline_reads_all_responses
     client = SolidRedis.config(port: @server.port).new_client
 

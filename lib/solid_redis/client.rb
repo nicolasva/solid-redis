@@ -131,10 +131,12 @@ module SolidRedis
     end
 
     def open_socket(target)
-      socket = if target.path
-        UNIXSocket.new(target.path)
+      if target.path
+        socket = UNIXSocket.new(target.path)
       else
-        Socket.tcp(target.host, target.port, connect_timeout: target.connect_timeout)
+        socket = Socket.tcp(target.host, target.port, connect_timeout: target.connect_timeout)
+        # Each request is written at once; Nagle would only delay it.
+        socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
       end
       return socket unless target.ssl?
 
