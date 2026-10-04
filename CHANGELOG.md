@@ -6,11 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-10-04
+
 ### Changed
 
 - Enable `TCP_NODELAY` on TCP connections so consecutive writes (pipelines,
   Pub/Sub re-subscription) are not delayed by Nagle's algorithm.
-- With the unreleased `solid-resp-ractor` parser and encoder optimizations,
+- Require `solid-resp-ractor` `~> 0.1.5`. With its parser and encoder
+  optimizations,
   the Ruby 4.0.1 loopback comparison improves pipeline throughput by 22.6%,
   19.8% and 14.5% at 1, 4 and 8 Ractors (7.5 → 5.0 allocations/op) and
   GET/SET by 5.5% at 1 Ractor (8.4 → 6.4 allocations/op) with lower CPU.
