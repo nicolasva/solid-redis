@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.summary = "A Ractor-aware Redis client with Sentinel, Cluster, Pub/Sub and blocking command support"
   spec.description = "Immutable, shareable Redis, Sentinel and Cluster configuration with isolated runtime state, pools, and sockets per Ractor. Supports pipelines, blocking commands, and Pub/Sub."
   spec.homepage = "https://github.com/nicolasva/solid-redis"
-  spec.license = "MIT"
+  spec.license = "LGPL-3.0-or-later"
   spec.required_ruby_version = ">= 3.1"
 
   spec.files = Dir["lib/**/*.rb", "README.md", "CHANGELOG.md", "LICENSE.txt"]

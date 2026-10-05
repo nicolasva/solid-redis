@@ -6,6 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.13] - 2026-10-05
+
+### Changed
+
+- Relicense the project from MIT to LGPL-3.0-or-later.
+
 ## [1.0.12] - 2026-10-04
 
 ### Changed
